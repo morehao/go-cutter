@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ignore "github.com/morehao/go-gitignore"
 	"golang.org/x/mod/modfile"
 )
 
@@ -42,8 +43,15 @@ func cutter(newProjectPath string) error {
 		return fmt.Errorf("create new project directory: %w", err)
 	}
 
+	// 读取.gitignore文件
+	gitignorePath := filepath.Join(currentDir, ".gitignore")
+	gitignore, err := readGitignore(gitignorePath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read .gitignore file fail, err: %w", err)
+	}
+
 	// 复制模板项目到新项目目录，并替换import路径
-	if err := copyAndReplace(currentDir, newProjectPath, templateName, newProjectName); err != nil {
+	if err := copyAndReplace(currentDir, newProjectPath, templateName, newProjectName, gitignore); err != nil {
 		return fmt.Errorf("copy and replace fail, err: %w", err)
 	}
 	if err := removeGitDir(newProjectPath); err != nil {
@@ -58,21 +66,48 @@ func isGoProject(path string) bool {
 	return !os.IsNotExist(err)
 }
 
+// readGitignore 读取.gitignore文件并返回IgnoreParser
+func readGitignore(filename string) (*ignore.GitIgnore, error) {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return ignore.CompileIgnoreLines(), nil
+	}
+	ig, err := ignore.CompileIgnoreFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	return ig, nil
+}
+
 // copyAndReplace copy指定目录，并替换import路径
-func copyAndReplace(srcDir, dstDir, oldName, newName string) error {
-	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+func copyAndReplace(srcDir, dstDir, oldName, newName string, ig *ignore.GitIgnore) error {
+	err := filepath.Walk(srcDir, func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
+		// 获取相对于源目录的路径
+		relativePath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+
+		// 检查是否排除
+		if ig.MatchesPath(relativePath) {
+			fmt.Println("Excluding:", path)
+			if fileInfo.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
 		// 创建目标目录
 		targetPath := strings.Replace(path, srcDir, dstDir, 1)
-		if info.IsDir() {
-			return os.MkdirAll(targetPath, info.Mode())
+		if fileInfo.IsDir() {
+			return os.MkdirAll(targetPath, fileInfo.Mode())
 		}
 
 		// 复制文件并替换 import 路径
-		if strings.HasSuffix(info.Name(), ".go") {
+		if strings.HasSuffix(fileInfo.Name(), ".go") {
 			return copyAndReplaceGoFile(path, targetPath, oldName, newName)
 		}
 
