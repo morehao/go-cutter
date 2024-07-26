@@ -98,6 +98,7 @@ func copyAndReplace(srcDir, dstDir, oldName, newName string, excludes []string) 
 		// 检查是否排除
 		for _, exclude := range excludes {
 			if strings.Contains(path, exclude) {
+				fmt.Println("Excluding:", path)
 				return nil
 			}
 		}
