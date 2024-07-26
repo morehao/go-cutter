@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -43,14 +42,8 @@ func cutter(newProjectPath string) error {
 		return fmt.Errorf("create new project directory: %w", err)
 	}
 
-	// 读取.gitignore文件并创建排除列表
-	excludes, err := readGitignore(filepath.Join(currentDir, ".gitignore"))
-	if err != nil {
-		return fmt.Errorf("read .gitignore fail, err: %w", err)
-	}
-
 	// 复制模板项目到新项目目录，并替换import路径
-	if err := copyAndReplace(currentDir, newProjectPath, templateName, newProjectName, excludes); err != nil {
+	if err := copyAndReplace(currentDir, newProjectPath, templateName, newProjectName); err != nil {
 		return fmt.Errorf("copy and replace fail, err: %w", err)
 	}
 	if err := removeGitDir(newProjectPath); err != nil {
@@ -65,42 +58,11 @@ func isGoProject(path string) bool {
 	return !os.IsNotExist(err)
 }
 
-// readGitignore 读取.gitignore文件并返回排除列表
-func readGitignore(filename string) ([]string, error) {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return []string{}, nil
-	}
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			lines = append(lines, line)
-		}
-	}
-	return lines, scanner.Err()
-}
-
 // copyAndReplace copy指定目录，并替换import路径
-func copyAndReplace(srcDir, dstDir, oldName, newName string, excludes []string) error {
+func copyAndReplace(srcDir, dstDir, oldName, newName string) error {
 	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
-		}
-
-		// 检查是否排除
-		for _, exclude := range excludes {
-			if strings.Contains(path, exclude) {
-				fmt.Println("Excluding:", path)
-				return nil
-			}
 		}
 
 		// 创建目标目录
