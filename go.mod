@@ -1,4 +1,4 @@
-module github.com/morehao/gocutter
+module github.com/morehao/go-cutter
 
 go 1.21
 
